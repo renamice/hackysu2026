@@ -1,344 +1,370 @@
 (function() {
-    // ---------- Physical constants ----------
-    const R0 = 120;                // nominal resistance (Ω)
-    const GF = 2.0;                 // gauge factor
-    const A = 1e-4;                  // cross-sectional area (m²)
-    const E = 200e9;                  // Young's modulus (Pa)
-    const V_EX = 5.0;                 // excitation voltage (V)
+    // ---------- Physical Constants ----------
+    const R0 = 120.0;     // Nominal resistance (Ω)
+    const GF = 2.0;       // Gauge factor
+    const A = 1e-4;       // Cross-sectional area (m²)
+    const E = 200e9;      // Young's modulus (Pa)
+    const V_EX = 5.0;     // Excitation voltage (V)
 
-    // Force range for theoretical curve
-    const FORCE_MIN = 0;
-    const FORCE_MAX = 1000;
-    const FORCE_STEP = 10;
+    const MAX_DATA_POINTS = 60;
+    const UPDATE_INTERVAL = 100; // ms
+    
+    // ---------- Channel Colors ----------
+    const colors = {
+        1: '#ef4444', // Red
+        2: '#22c55e', // Green
+        3: '#f59e0b', // Orange
+        4: '#a855f7'  // Purple
+    };
 
-    // ---------- Helper: compute resistance from force ----------
-    function computeResistance(force) {
-        const strain = force / (A * E);
-        return R0 * (1 + GF * strain);
+    // Store state and DOM refs for each channel
+    const channels = {};
+
+    function computeStrain(force) {
+        return force / (A * E); // Strain (dl/l)
     }
 
-    // ---------- Prepare theoretical line data ----------
-    const theoryPoints = [];
-    for (let f = FORCE_MIN; f <= FORCE_MAX; f += FORCE_STEP) {
-        theoryPoints.push({ x: f, y: computeResistance(f) });
-    }
+    function initChannel(id) {
+        const slider = document.querySelector(`.ch${id}-slider`);
+        const valForce = document.getElementById(`val-force-${id}`);
+        const valStrain = document.getElementById(`val-strain-${id}`);
+        const valRes = document.getElementById(`val-res-${id}`);
+        const valVout = document.getElementById(`val-vout-${id}`);
+        const canvas = document.getElementById(`chart-${id}`);
+        
+        // Initial Chart Data (flat line at 0)
+        const initialData = Array(MAX_DATA_POINTS).fill(0);
 
-    // ---------- Get DOM elements ----------
-    const forceSliders = [
-        document.getElementById('forceSlider1'),
-        document.getElementById('forceSlider2'),
-        document.getElementById('forceSlider3'),
-        document.getElementById('forceSlider4')
-    ];
-    const forceSpans = [
-        document.getElementById('forceValue1'),
-        document.getElementById('forceValue2'),
-        document.getElementById('forceValue3'),
-        document.getElementById('forceValue4')
-    ];
-    const resistanceSpans = [
-        document.getElementById('resistanceValue1'),
-        document.getElementById('resistanceValue2'),
-        document.getElementById('resistanceValue3'),
-        document.getElementById('resistanceValue4')
-    ];
-
-    // Bridge output display
-    const bridgeSpan1 = document.getElementById('bridgeVoltage1');
-    const bridgeVSpan1 = document.getElementById('bridgeVoltageV1');
-    const bridgeSpan2 = document.getElementById('bridgeVoltage2');
-    const bridgeVSpan2 = document.getElementById('bridgeVoltageV2');
-
-    // Total force control
-    const totalForceSlider = document.getElementById('totalForceSlider');
-    const totalForceSpan = document.getElementById('totalForceValue');
-
-    // Canvas
-    const canvas = document.getElementById('forceCanvas');
-    const ctx = canvas.getContext('2d');
-
-    // ---------- State ----------
-    let updating = false;               // prevent recursive updates
-    let circlePos = { x: 0.5, y: 0.5 }; // normalized (0..1)
-    let dragging = false;
-
-    // ---------- Initialize Chart.js ----------
-    const chartCtx = document.getElementById('strainChart').getContext('2d');
-    const chart = new Chart(chartCtx, {
-        type: 'scatter',
-        data: {
-            datasets: [
-                {
-                    label: 'Theoretical R vs. Force',
-                    data: theoryPoints,
-                    borderColor: 'blue',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
+        const chart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: Array(MAX_DATA_POINTS).fill(''),
+                datasets: [{
+                    label: `Output (mV)`,
+                    data: [...initialData],
+                    borderColor: colors[id],
+                    backgroundColor: createGradient(canvas.getContext('2d'), colors[id]),
+                    borderWidth: 2.5,
                     pointRadius: 0,
-                    showLine: true,
-                    tension: 0.1
-                },
-                {
-                    label: 'Gauge 1 (R₁)',
-                    data: [{ x: 200, y: computeResistance(200) }],
-                    borderColor: 'red',
-                    backgroundColor: 'red',
-                    pointRadius: 8,
-                    pointStyle: 'circle',
-                    showLine: false
-                },
-                {
-                    label: 'Gauge 2 (R₂)',
-                    data: [{ x: 400, y: computeResistance(400) }],
-                    borderColor: 'green',
-                    backgroundColor: 'green',
-                    pointRadius: 8,
-                    pointStyle: 'circle',
-                    showLine: false
-                },
-                {
-                    label: 'Gauge 3 (R₃)',
-                    data: [{ x: 600, y: computeResistance(600) }],
-                    borderColor: 'orange',
-                    backgroundColor: 'orange',
-                    pointRadius: 8,
-                    pointStyle: 'circle',
-                    showLine: false
-                },
-                {
-                    label: 'Gauge 4 (R₄)',
-                    data: [{ x: 800, y: computeResistance(800) }],
-                    borderColor: 'purple',
-                    backgroundColor: 'purple',
-                    pointRadius: 8,
-                    pointStyle: 'circle',
-                    showLine: false
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    title: { display: true, text: 'Force (N)' },
-                    min: FORCE_MIN,
-                    max: FORCE_MAX
-                },
-                y: {
-                    title: { display: true, text: 'Resistance (Ω)' },
-                    min: computeResistance(FORCE_MIN) * 0.999,
-                    max: computeResistance(FORCE_MAX) * 1.001
-                }
+                    fill: true,
+                    tension: 0.4
+                }]
             },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: (context) => {
-                            const label = context.dataset.label || '';
-                            const point = context.raw;
-                            return `${label}: (${point.x.toFixed(1)} N, ${point.y.toFixed(4)} Ω)`;
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: { display: false, drawBorder: false },
+                        ticks: { display: false }
+                    },
+                    y: {
+                        display: true,
+                        position: 'right',
+                        min: -0.005,
+                        max: 0.05, 
+                        grid: { 
+                            color: 'rgba(255, 255, 255, 0.05)',
+                            drawBorder: false,
+                        },
+                        ticks: { 
+                            color: '#94a3b8', 
+                            font: { family: 'Orbitron', size: 10 },
+                            callback: function(value) {
+                                return value.toFixed(3);
+                            }
                         }
                     }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
                 }
             }
+        });
+
+        channels[id] = {
+            id, slider, valForce, valStrain, valRes, valVout, chart,
+            dataFlow: initialData,
+            value: 0,
+            lastVout: 0
+        };
+
+        // Attach event listener
+        slider.addEventListener('input', (e) => {
+            channels[id].value = parseFloat(e.target.value);
+            updateReadouts(id);
+        });
+
+        updateReadouts(id);
+    }
+
+    function createGradient(ctx, color) {
+        const gradient = ctx.createLinearGradient(0, 0, 0, 180);
+        gradient.addColorStop(0, hexToRgbA(color, 0.3));
+        gradient.addColorStop(1, hexToRgbA(color, 0.0));
+        return gradient;
+    }
+
+    function hexToRgbA(hex, alpha){
+        let c;
+        if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+            c = hex.substring(1).split('');
+            if(c.length === 3){
+                c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+            }
+            c = '0x' + c.join('');
+            return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')';
         }
-    });
-
-    // ---------- Bridge output update ----------
-    function updateBridge() {
-        const R1 = computeResistance(parseFloat(forceSliders[0].value));
-        const R2 = computeResistance(parseFloat(forceSliders[1].value));
-        const R3 = computeResistance(parseFloat(forceSliders[2].value));
-        const R4 = computeResistance(parseFloat(forceSliders[3].value));
-
-        const vOut1 = V_EX * (R2 / (R1 + R2) - R3 / (R4 + R3));
-        bridgeSpan1.textContent = (vOut1 * 1000).toFixed(4) + ' mV';
-        bridgeVSpan1.textContent = `(${vOut1.toFixed(6)} V)`;
-
-        const vOut2 = V_EX * (R3 / (R1 + R3) - R2 / (R4 + R2));
-        bridgeSpan2.textContent = (vOut2 * 1000).toFixed(4) + ' mV';
-        bridgeVSpan2.textContent = `(${vOut2.toFixed(6)} V)`;
+        throw new Error('Bad Hex');
     }
 
-    // ---------- Update a single gauge from its slider (called by slider event) ----------
-    function updateGaugeFromSlider(index) {
-        if (updating) return;
-        updating = true;
-        const force = parseFloat(forceSliders[index].value);
-        const resistance = computeResistance(force);
+    function updateReadouts(id) {
+        const ch = channels[id];
+        const force = ch.value;
+        const strain = computeStrain(force);
+        const res = R0 * (1 + GF * strain);
+        
+        // Quarter bridge output formula: Vout = V_ex * (R_g / (R_g + R0) - 0.5)
+        const vOut = V_EX * (res / (res + R0) - 0.5);
+        const vOutMV = vOut * 1000; // Convert to millivolts
 
-        forceSpans[index].textContent = force;
-        resistanceSpans[index].textContent = resistance.toFixed(4);
-        chart.data.datasets[index + 1].data = [{ x: force, y: resistance }];
-
-        // Bridge and chart update will be triggered after all sliders (in the event we call updateBridge and chart.update separately)
-        // But we'll let the slider event handler do that to avoid multiple updates.
-        updating = false;
+        ch.valForce.innerHTML = `${force.toFixed(0)} <small>N</small>`;
+        
+        const microStrain = strain * 1e6;
+        ch.valStrain.innerHTML = `${microStrain.toFixed(1)} <small>με</small>`;
+        
+        ch.valRes.innerHTML = `${res.toFixed(4)} <small>Ω</small>`;
+        ch.valVout.innerHTML = `${vOutMV.toFixed(3)} <small>mV</small>`;
+        
+        ch.lastVout = vOutMV;
+        
+        // Dynamic y-axis scaling logic
+        let optimalMax = Math.max(0.05, vOutMV * 1.5);
+        
+        ch.chart.options.scales.y.max = optimalMax;
+        ch.chart.options.scales.y.min = -0.1 * optimalMax;
     }
 
-    // ---------- Set all forces programmatically (from canvas or total force) ----------
-    function setAllForces(forces) {
-        if (updating) return;
-        updating = true;
+    // ---------- Master 2D Pad Logic ----------
+    const padCanvas = document.getElementById('master-pad');
+    const padCtx = padCanvas.getContext('2d');
+    const globalForceSlider = document.getElementById('global-force');
+    const globalForceSpan = document.getElementById('val-global-force');
+    
+    // Physics & Interaction State
+    let targetX = 0.5; // Normalized 0-1
+    let targetY = 0.5;
+    let currentX = 0.5;
+    let currentY = 0.5;
+    const SMOOTHING = 0.15; // Lower is slower/smoother
+    
+    let isDragging = false;
+    let totalForce = parseFloat(globalForceSlider.value);
 
-        // Update sliders, displays, and chart datasets
-        for (let i = 0; i < 4; i++) {
-            let f = Math.min(FORCE_MAX, Math.max(FORCE_MIN, forces[i])); // clamp
-            forceSliders[i].value = f;
-            forceSpans[i].textContent = f;
-            const r = computeResistance(f);
-            resistanceSpans[i].textContent = r.toFixed(4);
-            chart.data.datasets[i + 1].data = [{ x: f, y: r }];
+    function updatePad() {
+        const w = padCanvas.width;
+        const h = padCanvas.height;
+
+        padCtx.clearRect(0, 0, w, h);
+
+        // Grid lines
+        padCtx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        padCtx.lineWidth = 1;
+        
+        padCtx.beginPath();
+        for(let i=1; i<4; i++) {
+            padCtx.moveTo(w * (i/4), 0);
+            padCtx.lineTo(w * (i/4), h);
+            padCtx.moveTo(0, h * (i/4));
+            padCtx.lineTo(w, h * (i/4));
         }
+        padCtx.stroke();
 
-        updateBridge();
-        chart.update();
-        updating = false;
+        // Crosshairs intersecting at puck
+        const px = currentX * w;
+        const py = currentY * h;
+
+        padCtx.beginPath();
+        padCtx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
+        padCtx.setLineDash([4, 4]);
+        padCtx.moveTo(px, 0); padCtx.lineTo(px, h);
+        padCtx.moveTo(0, py); padCtx.lineTo(w, py);
+        padCtx.stroke();
+        padCtx.setLineDash([]);
+
+        // Puck
+        const radius = isDragging ? 14 : 12;
+        
+        // Outer glow
+        padCtx.beginPath();
+        padCtx.arc(px, py, radius * 2, 0, Math.PI * 2);
+        const glow = padCtx.createRadialGradient(px, py, radius, px, py, radius * 2);
+        glow.addColorStop(0, 'rgba(56, 189, 248, 0.4)');
+        glow.addColorStop(1, 'rgba(56, 189, 248, 0)');
+        padCtx.fillStyle = glow;
+        padCtx.fill();
+
+        // Solid puck
+        padCtx.beginPath();
+        padCtx.arc(px, py, radius, 0, Math.PI * 2);
+        padCtx.fillStyle = '#38bdf8';
+        padCtx.fill();
+        padCtx.strokeStyle = '#fff';
+        padCtx.lineWidth = 2;
+        padCtx.stroke();
     }
 
-    // ---------- Compute force fractions from normalized position ----------
-    function computeFractions(x, y) {
-        // x,y in [0,1]
-        // R1 (bottom-left): (1-x)*(1-y)
-        // R2 (bottom-right): x*(1-y)
-        // R3 (top-left): (1-x)*y
-        // R4 (top-right): x*y
-        const f1 = (1 - x) * (1 - y);
-        const f2 = x * (1 - y);
-        const f3 = (1 - x) * y;
-        const f4 = x * y;
+    // Map X/Y [0,1] to 4 load cells.
+    // Bottom-Left = R1, Bottom-Right = R2, Top-Left = R3, Top-Right = R4
+    function computeForceFractions(nx, ny) {
+        // In canvas, y=0 is TOP, y=1 is BOTTOM.
+        // Therefore, "bottom" logic means y near 1.
+        
+        // f1 = bottom-left -> x=0, y=1 -> (1-x) * y
+        // f2 = bottom-right -> x=1, y=1 -> x * y
+        // f3 = top-left -> x=0, y=0 -> (1-x) * (1-y)
+        // f4 = top-right -> x=1, y=0 -> x * (1-y)
+        
+        const f1 = (1 - nx) * ny;
+        const f2 = nx * ny;
+        const f3 = (1 - nx) * (1 - ny);
+        const f4 = nx * (1 - ny);
+        
         return [f1, f2, f3, f4];
     }
 
-    // ---------- Update forces from circle position and total force ----------
-    function updateForcesFromCircle() {
-        const totalF = parseFloat(totalForceSlider.value);
-        const fractions = computeFractions(circlePos.x, circlePos.y);
-        const forces = fractions.map(f => f * totalF);
-        setAllForces(forces);
+    function applyDistribution() {
+        const fractions = computeForceFractions(currentX, currentY);
+        
+        // Push distributed forces to individual channels via simulated slider events
+        for(let i=0; i<4; i++) {
+            const chId = i + 1;
+            const projectedForce = totalForce * fractions[i];
+            
+            // Programmatically update the channel logic
+            channels[chId].value = projectedForce;
+            channels[chId].slider.value = projectedForce;
+            updateReadouts(chId);
+        }
     }
 
-    // ---------- Draw canvas ----------
-    function drawCanvas() {
-        ctx.clearRect(0, 0, 300, 300);
-
-        // Draw rectangle (already the canvas border)
-        ctx.strokeStyle = '#34495e';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(0, 0, 300, 300);
-
-        // Draw crosshair lines (optional)
-        ctx.beginPath();
-        ctx.strokeStyle = '#bdc3c7';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
-        ctx.moveTo(150, 0); ctx.lineTo(150, 300);
-        ctx.moveTo(0, 150); ctx.lineTo(300, 150);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Draw circle
-        const x = circlePos.x * 300;
-        const y = circlePos.y * 300;
-        ctx.beginPath();
-        ctx.arc(x, y, 12, 0, 2 * Math.PI);
-        ctx.fillStyle = '#e67e22';
-        ctx.shadowColor = '#00000040';
-        ctx.shadowBlur = 6;
-        ctx.fill();
-        ctx.shadowColor = 'transparent';
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-    }
-
-    // ---------- Canvas event handlers ----------
-    function handleMouseDown(e) {
-        e.preventDefault();
-        dragging = true;
-        updatePositionFromEvent(e);
-    }
-
-    function handleMouseMove(e) {
-        if (!dragging) return;
-        e.preventDefault();
-        updatePositionFromEvent(e);
-    }
-
-    function handleMouseUp(e) {
-        dragging = false;
-    }
-
-    function updatePositionFromEvent(e) {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;   // usually 1 if canvas size matches CSS
-        const scaleY = canvas.height / rect.height;
-
-        let clientX, clientY;
-        if (e.touches) {
+    // Input Handling
+    function getPointerPos(e) {
+        const rect = padCanvas.getBoundingClientRect();
+        let clientX = e.clientX;
+        let clientY = e.clientY;
+        
+        if (e.touches && e.touches.length > 0) {
             clientX = e.touches[0].clientX;
             clientY = e.touches[0].clientY;
-        } else {
-            clientX = e.clientX;
-            clientY = e.clientY;
         }
 
-        // Calculate canvas-relative coordinates
-        let x = (clientX - rect.left) * scaleX;
-        let y = (clientY - rect.top) * scaleY;
-
-        // Clamp to rectangle
-        x = Math.min(300, Math.max(0, x));
-        y = Math.min(300, Math.max(0, y));
-
-        // Normalize
-        circlePos.x = x / 300;
-        circlePos.y = y / 300;
-
-        drawCanvas();
-        updateForcesFromCircle();
+        let x = (clientX - rect.left) / rect.width;
+        let y = (clientY - rect.top) / rect.height;
+        
+        // Clamp
+        return {
+            x: Math.max(0, Math.min(1, x)),
+            y: Math.max(0, Math.min(1, y))
+        };
     }
 
-    // Attach canvas events
-    canvas.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    // Touch support
-    canvas.addEventListener('touchstart', handleMouseDown, { passive: false });
-    window.addEventListener('touchmove', handleMouseMove, { passive: false });
-    window.addEventListener('touchend', handleMouseUp);
-    // Prevent default context menu on canvas
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    function handlePointerDown(e) {
+        e.preventDefault();
+        isDragging = true;
+        const pos = getPointerPos(e);
+        targetX = pos.x;
+        targetY = pos.y;
+        padCanvas.style.cursor = 'grabbing';
+    }
 
-    // ---------- Total force slider event ----------
-    totalForceSlider.addEventListener('input', () => {
-        totalForceSpan.textContent = totalForceSlider.value;
-        updateForcesFromCircle();
+    function handlePointerMove(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        const pos = getPointerPos(e);
+        targetX = pos.x;
+        targetY = pos.y;
+    }
+
+    function handlePointerUp() {
+        isDragging = false;
+        padCanvas.style.cursor = 'crosshair';
+    }
+
+    padCanvas.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('mousemove', handlePointerMove);
+    window.addEventListener('mouseup', handlePointerUp);
+    padCanvas.addEventListener('touchstart', handlePointerDown, {passive: false});
+    window.addEventListener('touchmove', handlePointerMove, {passive: false});
+    window.addEventListener('touchend', handlePointerUp);
+
+    globalForceSlider.addEventListener('input', (e) => {
+        totalForce = parseFloat(e.target.value);
+        globalForceSpan.textContent = totalForce;
+        // Don't need to manually applyDistribution here because the physics loop runs every tick and will catch it
     });
 
-    // ---------- Gauge slider events (manual override) ----------
-    forceSliders.forEach((slider, idx) => {
-        slider.addEventListener('input', () => {
-            if (updating) return;
-            updating = true;
-            const force = parseFloat(slider.value);
-            forceSpans[idx].textContent = force;
-            const r = computeResistance(force);
-            resistanceSpans[idx].textContent = r.toFixed(4);
-            chart.data.datasets[idx + 1].data = [{ x: force, y: r }];
-            updateBridge();
-            chart.update();
-            updating = false;
-        });
-    });
+    let lastTime = 0;
+    function tick(time) {
+        if (!lastTime) lastTime = time;
+        const delta = time - lastTime;
 
-    // ---------- Initialization ----------
-    // Set circle to center
-    circlePos = { x: 0.5, y: 0.5 };
-    drawCanvas();
-    // Set total force display
-    totalForceSpan.textContent = totalForceSlider.value;
-    // Compute initial forces from circle and total force
-    updateForcesFromCircle();
+        if (delta >= UPDATE_INTERVAL) {
+            for (let i = 1; i <= 4; i++) {
+                const ch = channels[i];
+                // Add tiny realistic electrical noise
+                const baseNoise = (Math.random() - 0.5) * 0.002;
+                const signalNoise = (Math.random() - 0.5) * 0.01 * ch.lastVout; 
+                let currentVal = ch.lastVout + baseNoise + signalNoise;
+
+                ch.dataFlow.push(currentVal);
+                ch.dataFlow.shift();
+                ch.chart.update();
+            }
+            lastTime = time - (delta % UPDATE_INTERVAL);
+        }
+        
+        // --- Smooth Master Pad Physics ---
+        // Lerp currentx/y towards targetx/y
+        currentX += (targetX - currentX) * SMOOTHING;
+        currentY += (targetY - currentY) * SMOOTHING;
+        
+        updatePad();
+        applyDistribution();
+
+        requestAnimationFrame(tick);
+    }
+
+    function initApp() {
+        for(let i=1; i<=4; i++) {
+            initChannel(i);
+            
+            // Set some initial random non-zero values for visual demonstration
+            setTimeout(() => {
+                const initialForce = Math.floor(Math.random() * 400 + 100);
+                channels[i].value = initialForce;
+                channels[i].slider.value = initialForce;
+                updateReadouts(i);
+            }, i * 200); // Stagger initial data bumps
+        }
+        
+        // Start simulation loop
+        updatePad();
+        applyDistribution();
+        requestAnimationFrame(tick);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+        initApp();
+    }
+
 })();

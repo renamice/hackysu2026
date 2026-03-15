@@ -3,102 +3,203 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>4‑Channel Strain Gauge + Interactive Force Distribution</title>
+    <meta name="description" content="Advanced 4-Channel Independent Strain Gauge Simulator">
+    <title>Strain Gauge Simulator Pro</title>
+    <!-- Google Fonts for modern typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <h1>📊 4‑Channel Strain Gauge + Interactive Force Distribution</h1>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>STRAIN GAUGE SIMULATOR <span class="badge">PRO</span></h1>
+            <p>4 Independent High-Precision Measurement Channels</p>
+        </header>
 
-    <!-- Four gauge cards -->
-    <div class="gauges-grid">
-        <!-- Gauge 1 (R₁) -->
-        <div class="gauge-card">
-            <h3>Gauge 1 (R₁)</h3>
-            <div class="slider-container">
-                <label for="forceSlider1">Force (N):</label>
-                <input type="range" id="forceSlider1" min="0" max="1000" value="200" step="1">
-                <span id="forceValue1">200</span>
+        <!-- Master Control -->
+        <section class="master-control-card">
+            <div class="master-header">
+                <h2><i class="icon-target"></i> GLOBAL FORCE DISTRIBUTION</h2>
+                <div class="master-status">INTERACTIVE 2D PAD</div>
             </div>
-            <div class="readout">
-                <span>Resistance:</span> <span id="resistanceValue1">120.0000</span> Ω
+            <div class="master-body">
+                <div class="canvas-wrapper">
+                    <canvas id="master-pad" width="280" height="280"></canvas>
+                    <div class="pad-labels">
+                        <span class="lbl-tl">R₃</span>
+                        <span class="lbl-tr">R₄</span>
+                        <span class="lbl-bl">R₁</span>
+                        <span class="lbl-br">R₂</span>
+                    </div>
+                </div>
+                <div class="master-controls">
+                    <div class="controls-group">
+                        <label>Total Global Force (N)</label>
+                        <div class="slider-wrapper master-slider-wrapper">
+                            <input type="range" id="global-force" min="0" max="4000" value="2000" step="10">
+                        </div>
+                        <div class="global-readout">
+                            <span id="val-global-force">2000</span> <small>N Total System Load</small>
+                        </div>
+                    </div>
+                    <div class="master-instructions">
+                        <p><strong>Drag the glowing focal point</strong> around the pad to distribute the total load across the 4 independent strain gauges (R₁ - R₄).</p>
+                    </div>
+                </div>
             </div>
-        </div>
-        <!-- Gauge 2 (R₂) -->
-        <div class="gauge-card">
-            <h3>Gauge 2 (R₂)</h3>
-            <div class="slider-container">
-                <label for="forceSlider2">Force (N):</label>
-                <input type="range" id="forceSlider2" min="0" max="1000" value="400" step="1">
-                <span id="forceValue2">400</span>
+        </section>
+
+        <main class="channels-container">
+            <!-- Channel 1 -->
+            <div class="channel-card" id="channel-1">
+                <div class="channel-header">
+                    <h2><span class="indicator ch1-color"></span> CHANNEL 1 (R₁)</h2>
+                    <div class="status">ACTIVE / 1/4 BRIDGE</div>
+                </div>
+                <div class="channel-body">
+                    <div class="controls">
+                        <label>Applied Force (N)</label>
+                        <div class="slider-wrapper">
+                            <input type="range" class="force-slider ch1-slider" data-ch="1" min="0" max="1000" value="0" step="1">
+                        </div>
+                    </div>
+                    <div class="readouts">
+                        <div class="readout-box">
+                            <span class="label">Force</span>
+                            <span class="value" id="val-force-1">0 <small>N</small></span>
+                        </div>
+                        <div class="readout-box">
+                            <span class="label">Strain (με)</span>
+                            <span class="value" id="val-strain-1">0 <small>με</small></span>
+                        </div>
+                        <div class="readout-box">
+                            <span class="label">Resistance</span>
+                            <span class="value" id="val-res-1">120.000 <small>Ω</small></span>
+                        </div>
+                        <div class="readout-box highlight ch1-highlight">
+                            <span class="label">Output</span>
+                            <span class="value" id="val-vout-1">0.000 <small>mV</small></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chart-1"></canvas>
+                </div>
             </div>
-            <div class="readout">
-                <span>Resistance:</span> <span id="resistanceValue2">120.0000</span> Ω
+
+            <!-- Channel 2 -->
+            <div class="channel-card" id="channel-2">
+                <div class="channel-header">
+                    <h2><span class="indicator ch2-color"></span> CHANNEL 2 (R₂)</h2>
+                    <div class="status">ACTIVE / 1/4 BRIDGE</div>
+                </div>
+                <div class="channel-body">
+                    <div class="controls">
+                        <label>Applied Force (N)</label>
+                        <div class="slider-wrapper">
+                            <input type="range" class="force-slider ch2-slider" data-ch="2" min="0" max="1000" value="0" step="1">
+                        </div>
+                    </div>
+                    <div class="readouts">
+                        <div class="readout-box">
+                            <span class="label">Force</span>
+                            <span class="value" id="val-force-2">0 <small>N</small></span>
+                        </div>
+                        <div class="readout-box">
+                            <span class="label">Strain (με)</span>
+                            <span class="value" id="val-strain-2">0 <small>με</small></span>
+                        </div>
+                        <div class="readout-box">
+                            <span class="label">Resistance</span>
+                            <span class="value" id="val-res-2">120.000 <small>Ω</small></span>
+                        </div>
+                        <div class="readout-box highlight ch2-highlight">
+                            <span class="label">Output</span>
+                            <span class="value" id="val-vout-2">0.000 <small>mV</small></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chart-2"></canvas>
+                </div>
             </div>
-        </div>
-        <!-- Gauge 3 (R₃) -->
-        <div class="gauge-card">
-            <h3>Gauge 3 (R₃)</h3>
-            <div class="slider-container">
-                <label for="forceSlider3">Force (N):</label>
-                <input type="range" id="forceSlider3" min="0" max="1000" value="600" step="1">
-                <span id="forceValue3">600</span>
+
+            <!-- Channel 3 -->
+            <div class="channel-card" id="channel-3">
+                <div class="channel-header">
+                    <h2><span class="indicator ch3-color"></span> CHANNEL 3 (R₃)</h2>
+                    <div class="status">ACTIVE / 1/4 BRIDGE</div>
+                </div>
+                <div class="channel-body">
+                    <div class="controls">
+                        <label>Applied Force (N)</label>
+                        <div class="slider-wrapper">
+                            <input type="range" class="force-slider ch3-slider" data-ch="3" min="0" max="1000" value="0" step="1">
+                        </div>
+                    </div>
+                    <div class="readouts">
+                        <div class="readout-box">
+                            <span class="label">Force</span>
+                            <span class="value" id="val-force-3">0 <small>N</small></span>
+                        </div>
+                        <div class="readout-box">
+                            <span class="label">Strain (με)</span>
+                            <span class="value" id="val-strain-3">0 <small>με</small></span>
+                        </div>
+                        <div class="readout-box">
+                            <span class="label">Resistance</span>
+                            <span class="value" id="val-res-3">120.000 <small>Ω</small></span>
+                        </div>
+                        <div class="readout-box highlight ch3-highlight">
+                            <span class="label">Output</span>
+                            <span class="value" id="val-vout-3">0.000 <small>mV</small></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chart-3"></canvas>
+                </div>
             </div>
-            <div class="readout">
-                <span>Resistance:</span> <span id="resistanceValue3">120.0000</span> Ω
+
+            <!-- Channel 4 -->
+            <div class="channel-card" id="channel-4">
+                <div class="channel-header">
+                    <h2><span class="indicator ch4-color"></span> CHANNEL 4 (R₄)</h2>
+                    <div class="status">ACTIVE / 1/4 BRIDGE</div>
+                </div>
+                <div class="channel-body">
+                    <div class="controls">
+                        <label>Applied Force (N)</label>
+                        <div class="slider-wrapper">
+                            <input type="range" class="force-slider ch4-slider" data-ch="4" min="0" max="1000" value="0" step="1">
+                        </div>
+                    </div>
+                    <div class="readouts">
+                        <div class="readout-box">
+                            <span class="label">Force</span>
+                            <span class="value" id="val-force-4">0 <small>N</small></span>
+                        </div>
+                        <div class="readout-box">
+                            <span class="label">Strain (με)</span>
+                            <span class="value" id="val-strain-4">0 <small>με</small></span>
+                        </div>
+                        <div class="readout-box">
+                            <span class="label">Resistance</span>
+                            <span class="value" id="val-res-4">120.000 <small>Ω</small></span>
+                        </div>
+                        <div class="readout-box highlight ch4-highlight">
+                            <span class="label">Output</span>
+                            <span class="value" id="val-vout-4">0.000 <small>mV</small></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chart-4"></canvas>
+                </div>
             </div>
-        </div>
-        <!-- Gauge 4 (R₄) -->
-        <div class="gauge-card">
-            <h3>Gauge 4 (R₄)</h3>
-            <div class="slider-container">
-                <label for="forceSlider4">Force (N):</label>
-                <input type="range" id="forceSlider4" min="0" max="1000" value="800" step="1">
-                <span id="forceValue4">800</span>
-            </div>
-            <div class="readout">
-                <span>Resistance:</span> <span id="resistanceValue4">120.0000</span> Ω
-            </div>
-        </div>
+        </main>
     </div>
-
-    <!-- Interactive force distribution canvas -->
-    <div class="distribution-card">
-        <h3>🎯 Force Distribution (drag the circle)</h3>
-        <div class="total-force-control">
-            <label for="totalForceSlider">Total Force (N):</label>
-            <input type="range" id="totalForceSlider" min="0" max="1000" value="500" step="1">
-            <span id="totalForceValue">500</span>
-        </div>
-        <canvas id="forceCanvas" width="300" height="300"></canvas>
-        <div class="canvas-note">
-            Circle position → force fractions: bottom‑left (R₁), bottom‑right (R₂), top‑left (R₃), top‑right (R₄)
-        </div>
-    </div>
-
-    <!-- Wheatstone bridge output -->
-    <div class="bridge-card">
-        <h3>⚡ Wheatstone Bridge (5 V excitation)</h3>
-        <div class="bridge-output" id="bridgeVoltage1">0.0000 mV</div>
-        <div class="bridge-note">
-            Output = 5 · (R₂/(R₁+R₂) − R₃/(R₄+R₃))<br>
-            <span id="bridgeVoltageV1">(0.000000 V)</span>
-        </div>
-
-        <div class="bridge-output" id="bridgeVoltage2">0.0000 mV</div>
-        <div class="bridge-note">
-            Output = 5 · (R₃/(R₁+R₃) − R₂/(R₄+R₂))<br>
-            <span id="bridgeVoltageV2">(0.000000 V)</span>
-        </div>
-    </div>
-
-    <!-- Chart area -->
-    <div class="chart-card">
-        <canvas id="strainChart"></canvas>
-        <div class="note">Theoretical curve (blue) and operating points for four gauges (colored dots).</div>
-    </div>
-
-    <script src="script.js">
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
